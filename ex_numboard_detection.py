@@ -1,3 +1,4 @@
+from cv2 import imreadmulti
 import imutils
 import cv2
 import numpy as np
@@ -155,7 +156,7 @@ def cal_0(lists):
 img = cv2.imread('car/d4507.jpg')  # 6
 
 img_err = img.copy()
-img = cv2.resize(img, (0, 0), fx=0.3, fy=0.3,interpolation = cv2.INTER_AREA)
+img = imutils.resize(img, width=650)
 cv2.imshow('img', img_err)
 
 img_copy = img.copy()
@@ -171,7 +172,7 @@ if flag == 2:
   big_contours = pre_img_plate(img)
   rect, contour_list, flag = rect_detect(big_contours)
 
-"""
+
 xmin = contour_list[0][0]
 xmax = contour_list[0][2]
 ymin = contour_list[0][1]
@@ -207,6 +208,7 @@ else:
 #cv2_imshow(rotation_img)
 
 ######################### 번호 검출 #########################
+
 roi_copy = rotation_img.copy()
 contour_boxes, number_plate = pre_img_number(roi_copy)
 
