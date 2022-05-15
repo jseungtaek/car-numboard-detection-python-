@@ -135,7 +135,7 @@ def cal_0(lists):
           cnt += 1
     return cnt
 
-src = cv2.imread('car/d4507.jpg')
+src = cv2.imread('car/d7217.jpg')
 src = imutils.resize(src, width=650)
 
 src_copy = src.copy()
