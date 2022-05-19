@@ -1,3 +1,4 @@
+from cv2 import drawContours
 import imutils
 import cv2
 import numpy as np
@@ -14,17 +15,17 @@ def pre_img_plate(src):
   method = cv2.CHAIN_APPROX_SIMPLE
   contours, hierarchy = cv2.findContours(canny, mode, method)
   big_contours = sorted(contours, key=cv2.contourArea, reverse=True)[:30]
-  #print(big_contours)
   return big_contours
 
 def rect_detect(contour_list):
   contour_boxes = []
+  cnt = 0
   for cont in contour_list:
-    p = cv2.arcLength(cont, True)
-    ap = cv2.approxPolyDP(cont, 0.018 * p, True)
-    #print(len(ap))
-    flag = 0
+    p = cv2.arcLength(cont, True)#외곽선 길이 반환
+    ap = cv2.approxPolyDP(cont, 0.02 * p, True)#외곽선 근사화
     rect = 0
+    flag = 0
+    print(len(ap))
     if len(ap) == 4:
       rect = ap
       x, y, w, h = cv2.boundingRect(cont)
@@ -35,12 +36,17 @@ def rect_detect(contour_list):
       y_max = y + h
 
       contour_box = [x_min, y_min, x_max, y_max]
-      #print(contour_box)
       contour_boxes.append(contour_box)
       break
+    # elif (len(ap) == 6):
+    #   exclude_num = 1
+    #   flag = 1
+    # elif (len(ap) == 5):
+    #   exclude_num = 2
+    #   flag = 2
     else:
-      flag = 2
-  return rect, contour_boxes, flag
+      cnt += 1
+  return rect, contour_boxes, cnt
 
 def angle_cal(x1, x4, y1, y4):
   angle = math.degrees(math.atan2(y4 - y1, x4 - x1))
@@ -60,7 +66,6 @@ def pre_img_number(img):
   mode = cv2.RETR_LIST
   method = cv2.CHAIN_APPROX_SIMPLE
   contours1, hierarchy = cv2.findContours(gray2, mode, method)
-  #cv2.drawContours(img, contours1, -1, (255,0,0), 1)
   contour_boxes1 = []
   for contour1 in contours1:
       x, y, w, h = cv2.boundingRect(contour1)
@@ -70,26 +75,24 @@ def pre_img_number(img):
       y_max1 = y + h
       contour_box1 = [x_min1, y_min1, x_max1, y_max1]
       contour_boxes1.append(contour_box1)
-      #cv2.rectangle(img, (x_min1,y_min1), (x_max1, y_max1), (0,0,255), 3)
-
   return contour_boxes1, img
 
-def area_cal(x_min, y_min, x_max, y_max):
+def area_calculate(x_min, y_min, x_max, y_max):
   area = (x_max - x_min) * (y_max - y_min)
   return area
 
-def best_rect(sorted_list):
+def optimal_rect(sorted_list):
   max_area = 0
   inner = []
   for idx, area_cont in enumerate(sorted_list):
-    area = area_cal(area_cont[0], area_cont[1], area_cont[2], area_cont[3])
+    area = area_calculate(area_cont[0], area_cont[1], area_cont[2], area_cont[3])
     if area > max_area:
       max_area = area
-      best_idx = idx
-  best_area_contour = sorted_list[best_idx]
+      optimal_idx = idx
+  optimal_area_contour = sorted_list[optimal_idx]
   for i in range(len(sorted_list)):
-    if((best_area_contour[0] < sorted_list[i][0]) and (best_area_contour[2] > sorted_list[i][2])
-            and (best_area_contour[1] < sorted_list[i][1]) and (best_area_contour[3] > sorted_list[i][3])):
+    if((optimal_area_contour[0] < sorted_list[i][0]) and (optimal_area_contour[2] > sorted_list[i][2])
+            and (optimal_area_contour[1] < sorted_list[i][1]) and (optimal_area_contour[3] > sorted_list[i][3])):
 
       inner.append(sorted_list[i])
   return inner
@@ -136,17 +139,33 @@ def cal_0(lists):
     return cnt
 
 src = cv2.imread('car/d7217.jpg')
+src_err = src.copy()
 src = imutils.resize(src, width=650)
 
 src_copy = src.copy()
-big_contours = pre_img_plate(src)
-rect, contour_list, flag = rect_detect(big_contours)
+big_contours = pre_img_plate(src) #find all contour
+rect, contour_list, cnt = rect_detect(big_contours)
+
+if cnt == 2:
+  src = imutils.resize(src_err, width=1050)
+  src_copy = src.copy()
+  big_contours = pre_img_plate(src) #find all contour
+  rect, contour_list, cnt = rect_detect(big_contours)
+
+if cnt >= 10:
+  if cnt == 30:
+    src = imutils.resize(src_err, width = 750)
+  else:
+    src = imutils.resize(src_err, width=640)
+  src_copy = src.copy()
+  big_contours = pre_img_plate(src) #find all contour
+  rect, contour_list, cnt = rect_detect(big_contours)
 
 xmin = contour_list[0][0]
 xmax = contour_list[0][2]
 ymin = contour_list[0][1]
 ymax = contour_list[0][3]
-
+print(xmin)
 cv2.drawContours(src_copy, [rect], -1, (0, 255, 0), 3)
 
 rect = np.reshape(rect, (4, -1))
@@ -161,51 +180,52 @@ rec_y = sorted(rec_y)
 x1, x2, x3, x4 = rec_x[1], rec_x[0], rec_x[2], rec_x[3]
 y1, y2, y3, y4 = rec_y[0], rec_y[2], rec_y[3], rec_y[1]
 
-src_roi = src.copy()
-roi = src_roi[ymin:ymax, xmin:xmax]
+#회전 처리
+src_rotat = src.copy()
+rotat = src_rotat[ymin:ymax, xmin:xmax]
 
 angle = angle_cal(x1, x4, y1, y4)
 flag = 0
 if angle > 5.0:
   flag = 1
-  rotation_img = img_rotate(roi, angle + 1)  # 경사가 있다면 회전
+  rotation_img = img_rotate(rotat, angle + 1)  # 경사가 있다면 회전
 else:
   flag = 2
-  rotation_img = roi  # 경사가 없다면 회전x
+  rotation_img = rotat  # 경사가 없다면 회전x
 
-#cv2.imshow('ro',rotation_img)
 
 roi_copy = rotation_img.copy()
 contour_boxes, number_plate = pre_img_number(roi_copy)
-
+print(number_plate)
 sorted_contourboxes = sorted(contour_boxes, key=lambda x: x[0])
 src1 = number_plate.copy()
 src2 = src1.copy()
 src3 = src2.copy()
 ex1_img = src1.copy()
-inner = best_rect(sorted_contourboxes)  # 가장 큰 contour외부는 빼줌
+inner = optimal_rect(sorted_contourboxes)  # 가장 큰 contour외부는 빼줌
 contour_boxes1, src1 = inner_draw(inner, src1)
 
 all_area = src1.shape[1] * src1.shape[0]
-
-#print(contour_boxes1)
 contour_boxes2 = []
 for cnt in contour_boxes1:
   sub = cnt[2] - cnt[0]  # 전체에서 가로 비율
-  area = area_cal(cnt[0], cnt[1], cnt[2], cnt[3])  # 전체에서 넓이 비율
-  #print(area)
+  area = area_calculate(cnt[0], cnt[1], cnt[2], cnt[3])  # 전체에서 넓이 비율
   sub_per = (sub/all_area)*1000
   area_per = (area/all_area)*100
   if area_per > 0.3 and sub_per < 0.5:  # 6
     contour_boxes2.append(cnt)
 
+
+
 # car2에서 처럼 맨 앞이랑 맨 뒤 나사 노이즈 제거
 last_idx = len(contour_boxes2)-1
-first_area = area_cal(
+print(contour_boxes2)
+
+first_area = area_calculate(
     contour_boxes2[0][0], contour_boxes2[0][1], contour_boxes2[0][2], contour_boxes2[0][3])
-last_area = area_cal(contour_boxes2[last_idx][0], contour_boxes2[last_idx]
+last_area = area_calculate(contour_boxes2[last_idx][0], contour_boxes2[last_idx]
                      [1], contour_boxes2[last_idx][2], contour_boxes2[last_idx][3])
-last_area2 = area_cal(contour_boxes2[last_idx-1][0], contour_boxes2[last_idx-1]
+last_area2 = area_calculate(contour_boxes2[last_idx-1][0], contour_boxes2[last_idx-1]
                       [1], contour_boxes2[last_idx-1][2], contour_boxes2[last_idx-1][3])
 if last_area < 5000:
   del contour_boxes2[last_idx]
@@ -246,7 +266,7 @@ del contour_boxes3[0]
 # 너무 작은 컨투어 노이즈 제거
 contour_boxes4 = []
 for i in contour_boxes3:
-  area_c = area_cal(i[0], i[1], i[2], i[3])
+  area_c = area_calculate(i[0], i[1], i[2], i[3])
   if area_c > 1000:
     contour_boxes4.append(i)
 
@@ -330,7 +350,7 @@ for idx, out in enumerate(contour_in_out_all):
     y_center_out = (out[3]+out[1]) / 2
     y_center_in = (out[7]+out[5]) / 2
     #0은 내부와 외부 컨투어의 크기의 비율을 비교
-    if(percent_cal(area_cal(out[4], out[5], out[6], out[7]), area_cal(out[0], out[1], out[2], out[3])) >= 23):
+    if(percent_cal(area_calculate(out[4], out[5], out[6], out[7]), area_calculate(out[0], out[1], out[2], out[3])) >= 23):
       number_list.append(0)
     #elif(y_center_out > y_center_in):
     #elif(abs(y_center_out - y_center_in) < 100):
@@ -415,7 +435,7 @@ for idx, number in enumerate(number_list):
     if(idx_5 != -1):
       number_list[idx_5] = 5
 print(number_list)
-
+#"""
 
 
 #cv2.imshow('s', src_copy)
